@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white font-sans">
+    <div class="container mx-auto p-4">
+        <header class="flex justify-between items-center my-6">
+            <h1 class="text-3xl font-bold">Admin Panel</h1>
+            <a href="/logout" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">Abmelden</a>
+        </header>
+
+        <!-- Add/Edit Form -->
+        <div class="bg-gray-800 p-6 rounded-lg shadow-lg mb-8">
+            <h2 class="text-2xl font-bold mb-4" id="form-title">Neuen Fehlercode hinzufügen</h2>
+            <form id="error-form">
+                <input type="hidden" id="edit-code" value="">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="code" class="block text-gray-400 mb-2">Code</label>
+                        <input type="text" id="code" name="Code" class="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg" required>
+                    </div>
+                    <div>
+                        <label for="platforms" class="block text-gray-400 mb-2">Plattformen (kommagetrennt)</label>
+                        <input type="text" id="platforms" name="Platforms" class="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg" required>
+                    </div>
+                    <div class="md:col-span-2">
+                        <label for="hmi-message" class="block text-gray-400 mb-2">HMI-Meldung</label>
+                        <input type="text" id="hmi-message" name="HMI Message" class="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg" required>
+                    </div>
+                    <div class="md:col-span-2">
+                        <label for="cause" class="block text-gray-400 mb-2">Ursache</label>
+                        <textarea id="cause" name="Cause" rows="3" class="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg"></textarea>
+                    </div>
+                    <div class="md:col-span-2">
+                        <label for="action" class="block text-gray-400 mb-2">Aktion</label>
+                        <textarea id="action" name="Action" rows="3" class="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg"></textarea>
+                    </div>
+                </div>
+                <div class="mt-6 flex gap-4">
+                    <button type="submit" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition-colors" id="form-submit-btn">Hinzufügen</button>
+                    <button type="button" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-6 rounded-lg transition-colors" id="form-cancel-btn" style="display: none;">Abbrechen</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Error Codes Table -->
+        <div class="bg-gray-800 p-6 rounded-lg shadow-lg">
+            <h2 class="text-2xl font-bold mb-4">Fehlercodes</h2>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left">
+                    <thead>
+                        <tr class="border-b border-gray-700">
+                            <th class="p-3">Code</th>
+                            <th class="p-3">HMI-Meldung</th>
+                            <th class="p-3">Plattformen</th>
+                            <th class="p-3">Aktionen</th>
+                        </tr>
+                    </thead>
+                    <tbody id="errors-table-body">
+                        <!-- Rows will be populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="/static/js/admin.js"></script>
+</body>
+</html>
