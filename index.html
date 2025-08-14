@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fehlercode-Datenbank</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom Styles */
+        :root { --three-bg: #030712; --main-text: #f9fafb; --accent-color: #10B981; }
+        body { font-family: 'Inter', sans-serif; background-color: var(--three-bg); }
+        @import url('https://rsms.me/inter/inter.css');
+
+        #three-container { position: fixed; top: 0; left: 0; z-index: -1; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; animation: fadeIn 0.5s ease-in-out; }
+        .tab { border-bottom: 2px solid transparent; transition: all 0.3s ease; }
+        .tab.active { border-bottom-color: var(--accent-color); color: var(--accent-color); }
+
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #1f2937; }
+        ::-webkit-scrollbar-thumb { background: #4a5568; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #718096; }
+
+        /* Admin table inputs */
+        .admin-table input, .admin-table textarea {
+            background-color: #374151;
+            border: 1px solid #4b5563;
+            border-radius: 0.375rem;
+            padding: 0.5rem;
+            width: 100%;
+        }
+        .admin-table textarea { min-height: 80px; }
+    </style>
+    <script type="importmap">
+        { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.module.js" } }
+    </script>
+</head>
+<body class="text-main-text">
+
+    <div id="three-container"></div>
+
+    <div id="app" class="relative container mx-auto p-4">
+        <header class="text-center my-12">
+            <h1 class="text-5xl font-bold text-white drop-shadow-lg">Fehlercode-Datenbank</h1>
+            <p class="text-green-300 mt-2 text-lg">Interaktive Suche und Verwaltung für Fehlercodes</p>
+        </header>
+
+        <!-- Tab Navigation -->
+        <div class="flex justify-center mb-8 border-b border-gray-700">
+            <button class="tab active py-3 px-6 text-lg" data-tab="search">Suche</button>
+            <button class="tab py-3 px-6 text-lg" data-tab="admin">Admin Tab</button>
+        </div>
+
+        <!-- Search Tab Content -->
+        <div id="search-view" class="tab-content active">
+            <div class="flex flex-col md:flex-row gap-4 mb-8 max-w-4xl mx-auto">
+                <div class="relative flex-grow">
+                    <input type="text" id="search-input" class="w-full p-4 pl-5 bg-gray-800/50 border border-gray-700 rounded-full focus:outline-none focus:ring-2 focus:ring-green-500 text-white placeholder-gray-400 backdrop-blur-sm" placeholder="Suche nach Fehlercode, Text, etc...">
+                </div>
+                <div class="relative">
+                    <select id="platform-filter" class="w-full md:w-auto p-4 pr-10 bg-gray-800/50 border border-gray-700 rounded-full focus:outline-none focus:ring-2 focus:ring-green-500 text-white backdrop-blur-sm appearance-none">
+                        <option value="">Alle Plattformen</option>
+                    </select>
+                </div>
+            </div>
+            <div id="loading-indicator" class="text-center text-gray-300 py-10"><p class="text-lg">Lade Fehlercodes...</p></div>
+            <div id="results-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+        </div>
+
+        <!-- Admin Tab Content -->
+        <div id="admin-view" class="tab-content">
+            <div class="bg-gray-800/50 backdrop-blur-sm p-6 rounded-lg shadow-lg">
+                <h2 class="text-2xl font-bold mb-4">Daten verwalten</h2>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left">
+                        <thead>
+                            <tr class="border-b border-gray-700">
+                                <th class="p-3">Code</th>
+                                <th class="p-3">HMI-Meldung</th>
+                                <th class="p-3">Ursache</th>
+                                <th class="p-3">Aktion</th>
+                                <th class="p-3">Plattformen</th>
+                                <th class="p-3"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="admin-table-body" class="admin-table"></tbody>
+                    </table>
+                </div>
+                <button id="add-row-btn" class="mt-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">+ Neue Zeile</button>
+                <div class="mt-8">
+                    <h3 class="text-xl font-bold mb-2">Aktualisierte CSV generieren</h3>
+                    <p class="text-gray-400 mb-4">Nachdem Sie Änderungen vorgenommen haben, klicken Sie hier, um den neuen CSV-Inhalt zu generieren. Kopieren Sie den Text und ersetzen Sie damit den Inhalt der `error_codes.csv`-Datei.</p>
+                    <button id="generate-csv-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg">CSV generieren</button>
+                    <textarea id="csv-output" class="w-full h-48 mt-4 bg-gray-900 border border-gray-700 rounded-lg p-2 text-sm font-mono" readonly placeholder="Hier erscheint der generierte CSV-Inhalt..."></textarea>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+
+        // --- Three.js Setup ---
+        const container = document.getElementById('three-container');
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        container.appendChild(renderer.domElement);
+        const pointLight = new THREE.PointLight(0x00aaff, 1.5, 200);
+        pointLight.position.set(0, 0, 25);
+        scene.add(new THREE.AmbientLight(0xffffff, 0.1), pointLight);
+        const torusKnot = new THREE.Mesh(new THREE.TorusKnotGeometry(8, 1.5, 150, 20), new THREE.MeshStandardMaterial({ color: 0x2d6a4f, metalness: 0.7, roughness: 0.4 }));
+        scene.add(torusKnot);
+        const particlesGeometry = new THREE.BufferGeometry();
+        const posArray = new Float32Array(5000 * 3);
+        for (let i = 0; i < 5000 * 3; i++) { posArray[i] = (Math.random() - 0.5) * (Math.random() * 50); }
+        particlesGeometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+        const particlesMesh = new THREE.Points(particlesGeometry, new THREE.PointsMaterial({ size: 0.02, color: 0x40916c }));
+        scene.add(particlesMesh);
+        camera.position.z = 25;
+        let mouseX = 0, mouseY = 0;
+        document.addEventListener('mousemove', e => { mouseX = (e.clientX - window.innerWidth / 2) / 100; mouseY = (e.clientY - window.innerHeight / 2) / 100; });
+        const clock = new THREE.Clock();
+        const animate = () => {
+            const elapsedTime = clock.getElapsedTime();
+            torusKnot.rotation.y = .5 * elapsedTime;
+            particlesMesh.rotation.y = -.1 * elapsedTime;
+            camera.position.x += (mouseX - camera.position.x) * .05;
+            camera.position.y += (-mouseY - camera.position.y) * .05;
+            camera.lookAt(scene.position);
+            pointLight.position.set(Math.sin(elapsedTime * 0.5) * 20, Math.cos(elapsedTime * 0.5) * 20, 25);
+            renderer.render(scene, camera);
+            requestAnimationFrame(animate);
+        };
+        animate();
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // --- App Logic ---
+        let allErrors = [];
+        const searchInput = document.getElementById('search-input');
+        const platformFilter = document.getElementById('platform-filter');
+        const resultsContainer = document.getElementById('results-container');
+        const loadingIndicator = document.getElementById('loading-indicator');
+        const tabs = document.querySelectorAll('.tab');
+        const tabContents = document.querySelectorAll('.tab-content');
+        const adminTableBody = document.getElementById('admin-table-body');
+        const addRowBtn = document.getElementById('add-row-btn');
+        const generateCsvBtn = document.getElementById('generate-csv-btn');
+        const csvOutput = document.getElementById('csv-output');
+
+        const parseCSV = (text) => {
+            const rows = text.trim().split('\n'); // Corrected newline split
+            const headers = rows[0].split(';').map(h => h.trim());
+            return rows.slice(1).map(rowStr => {
+                const parts = rowStr.split(';');
+                if (parts.length !== 5) {
+                    console.warn('Skipping malformed row:', rowStr);
+                    return null;
+                }
+                let rowData = {};
+                headers.forEach((header, i) => {
+                    rowData[header] = parts[i] ? parts[i].trim() : '';
+                });
+                return rowData;
+            }).filter(Boolean); // Filter out null (malformed) rows
+        };
+
+        const filterAndDisplay = () => {
+            const searchTerm = searchInput.value.toLowerCase();
+            const selectedPlatform = platformFilter.value;
+            let filtered = allErrors;
+
+            if (selectedPlatform) filtered = filtered.filter(e => e.Platforms.includes(selectedPlatform));
+            if (searchTerm) filtered = filtered.filter(e => Object.values(e).some(v => String(v).toLowerCase().includes(searchTerm)));
+
+            displayResults(filtered);
+        };
+
+        const displayResults = (results) => {
+            resultsContainer.innerHTML = '';
+            if (results.length === 0) {
+                resultsContainer.innerHTML = '<p class="text-gray-400 col-span-full text-center">Keine Ergebnisse gefunden.</p>';
+                return;
+            }
+            results.forEach((code, index) => {
+                const el = document.createElement('div');
+                el.className = 'bg-gray-800/60 backdrop-blur-sm p-6 rounded-xl shadow-lg fade-in';
+                el.style.animationDelay = `${index * 50}ms`;
+                el.innerHTML = `
+                    <h2 class="text-xl font-bold mb-2 text-green-400">${code.Code}: ${code['HMI Message']}</h2>
+                    <p class="text-gray-300 mb-2"><strong>Ursache:</strong> ${code.Cause}</p>
+                    <p class="text-gray-300 mb-2"><strong>Aktion:</strong> ${code.Action}</p>
+                    <p class="text-gray-500 text-sm mt-4"><strong>Plattformen:</strong> ${code.Platforms}</p>`;
+                resultsContainer.appendChild(el);
+            });
+        };
+
+        const renderAdminTable = () => {
+            adminTableBody.innerHTML = '';
+            allErrors.forEach((error, index) => {
+                const row = document.createElement('tr');
+                row.dataset.index = index;
+                row.innerHTML = `
+                    <td><input type="text" value="${error.Code}" data-key="Code"></td>
+                    <td><input type="text" value="${error['HMI Message']}" data-key="HMI Message"></td>
+                    <td><textarea data-key="Cause">${error.Cause}</textarea></td>
+                    <td><textarea data-key="Action">${error.Action}</textarea></td>
+                    <td><input type="text" value="${error.Platforms}" data-key="Platforms"></td>
+                    <td><button class="text-red-500 hover:text-red-400" data-action="delete">Löschen</button></td>
+                `;
+                adminTableBody.appendChild(row);
+            });
+        };
+
+        addRowBtn.addEventListener('click', () => {
+            const newRow = document.createElement('tr');
+            newRow.innerHTML = `
+                <td><input type="text" placeholder="Code" data-key="Code"></td>
+                <td><input type="text" placeholder="HMI Message" data-key="HMI Message"></td>
+                <td><textarea placeholder="Cause" data-key="Cause"></textarea></td>
+                <td><textarea placeholder="Action" data-key="Action"></textarea></td>
+                <td><input type="text" placeholder="Platforms" data-key="Platforms"></td>
+                <td><button class="text-red-500 hover:text-red-400" data-action="delete">Löschen</button></td>
+            `;
+            adminTableBody.appendChild(newRow);
+        });
+
+        adminTableBody.addEventListener('click', e => {
+            if (e.target.dataset.action === 'delete') {
+                e.target.closest('tr').remove();
+            }
+        });
+
+        generateCsvBtn.addEventListener('click', () => {
+            const headers = ['Code', 'HMI Message', 'Cause', 'Action', 'Platforms'];
+            const rows = Array.from(adminTableBody.querySelectorAll('tr'));
+            const csvData = rows.map(row => {
+                const inputs = Array.from(row.querySelectorAll('[data-key]'));
+                return inputs.map(input => `"${input.value.replace(/"/g, '""')}"`).join(';');
+            });
+            csvOutput.value = [headers.join(';'), ...csvData].join('\\n');
+            csvOutput.select();
+            alert('CSV-Inhalt wurde generiert und in das Textfeld kopiert. Sie können ihn jetzt manuell speichern.');
+        });
+
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                tabs.forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                tabContents.forEach(content => content.classList.remove('active'));
+                document.getElementById(`${tab.dataset.tab}-view`).classList.add('active');
+            });
+        });
+
+        async function main() {
+            loadingIndicator.style.display = 'block';
+            resultsContainer.innerHTML = '';
+            try {
+                const response = await fetch('error_codes.csv');
+                if (!response.ok) throw new Error('Network response was not ok.');
+                const csvText = await response.text();
+                allErrors = parseCSV(csvText);
+
+                const platforms = [...new Set(allErrors.flatMap(e => e.Platforms.split(',').map(p => p.trim())))].filter(Boolean);
+                platformFilter.innerHTML = '<option value="">Alle Plattformen</option>';
+                platforms.forEach(p => platformFilter.innerHTML += `<option value="${p}">${p}</option>`);
+
+                filterAndDisplay();
+                renderAdminTable();
+            } catch (error) {
+                console.error('Failed to load or parse error codes:', error);
+                resultsContainer.innerHTML = '<p class="text-red-500 col-span-full text-center">Fehler beim Laden der Daten.</p>';
+            } finally {
+                loadingIndicator.style.display = 'none';
+            }
+        }
+
+        searchInput.addEventListener('input', filterAndDisplay);
+        platformFilter.addEventListener('change', filterAndDisplay);
+
+        main();
+    </script>
+</body>
+</html>
